@@ -7,3 +7,4 @@ openai
 tiktoken
 PyPDF2
 langchain_community
+streamlit
