@@ -10,3 +10,4 @@ langchain_community
 streamlit
 langchain_openai
 astrapy
+faiss-cpu

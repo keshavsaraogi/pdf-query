@@ -2,16 +2,12 @@ import os
 import streamlit as st
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
-from langchain_community.vectorstores import AstraDB
+from langchain_community.vectorstores import FAISS
 from langchain.indexes.vectorstore import VectorStoreIndexWrapper
 from langchain_openai import OpenAI, OpenAIEmbeddings
 
 load_dotenv()
 
-ASTRA_DB_TOKEN = os.getenv("ASTRA_DB_TOKEN")
-ASTRA_DB_API_ENDPOINT = os.getenv("ASTRA_DB_API_ENDPOINT")
-ASTRA_DB_KEYSPACE = os.getenv("ASTRA_DB_KEYSPACE")  # optional namespace
-ASTRA_DB_COLLECTION = os.getenv("ASTRA_DB_COLLECTION", "pdf_chatbot_collection")
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 llm = OpenAI(openai_api_key=OPENAI_API_KEY)
@@ -25,10 +21,6 @@ uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
 
 if uploaded_file:
     missing = []
-    if not ASTRA_DB_TOKEN:
-        missing.append("ASTRA_DB_TOKEN")
-    if not ASTRA_DB_API_ENDPOINT:
-        missing.append("ASTRA_DB_API_ENDPOINT")
     if not OPENAI_API_KEY:
         missing.append("OPENAI_KEY")
     if missing:
@@ -49,26 +41,10 @@ if uploaded_file:
     if text:
         st.success("✅ PDF uploaded and text extracted!")
 
-        try:
-            vectordb = AstraDB(
-                embedding=embedding,
-                collection_name=ASTRA_DB_COLLECTION,
-                api_endpoint=ASTRA_DB_API_ENDPOINT,
-                token=ASTRA_DB_TOKEN,
-                namespace=ASTRA_DB_KEYSPACE if ASTRA_DB_KEYSPACE else None,
-            )
-        except Exception as e:
-            st.error(
-                "Failed to initialize Astra Data API vector store. "
-                "Please verify ASTRA_DB_TOKEN and ASTRA_DB_API_ENDPOINT. If you have a specific namespace, set ASTRA_DB_KEYSPACE.\n\n"
-                f"Details: {e}"
-            )
-            st.stop()
-
+        vectordb = FAISS.from_texts([text], embedding=embedding)
         index = VectorStoreIndexWrapper(vectorstore=vectordb)
-        vectordb.add_texts([text])
 
-        st.success("✅ Text embedded into the vector database!")
+        st.success("✅ Text embedded into the FAISS index!")
         st.subheader("Ask a question about your PDF 👇")
 
         if "history" not in st.session_state:
