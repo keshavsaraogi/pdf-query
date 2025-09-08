@@ -9,3 +9,4 @@ PyPDF2
 langchain_community
 streamlit
 langchain_openai
+astrapy

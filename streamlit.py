@@ -1,16 +1,17 @@
 import os
-import cassio
 import streamlit as st
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
-from langchain_community.vectorstores import Cassandra
+from langchain_community.vectorstores import AstraDB
 from langchain.indexes.vectorstore import VectorStoreIndexWrapper
 from langchain_openai import OpenAI, OpenAIEmbeddings
 
 load_dotenv()
 
-ASTRA_DB_ID = os.getenv("ASTRA_DB_ID")
 ASTRA_DB_TOKEN = os.getenv("ASTRA_DB_TOKEN")
+ASTRA_DB_API_ENDPOINT = os.getenv("ASTRA_DB_API_ENDPOINT")
+ASTRA_DB_KEYSPACE = os.getenv("ASTRA_DB_KEYSPACE")  # optional namespace
+ASTRA_DB_COLLECTION = os.getenv("ASTRA_DB_COLLECTION", "pdf_chatbot_collection")
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 llm = OpenAI(openai_api_key=OPENAI_API_KEY)
@@ -23,6 +24,20 @@ st.markdown("Upload a PDF and start chatting with it using AI!")
 uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
 
 if uploaded_file:
+    missing = []
+    if not ASTRA_DB_TOKEN:
+        missing.append("ASTRA_DB_TOKEN")
+    if not ASTRA_DB_API_ENDPOINT:
+        missing.append("ASTRA_DB_API_ENDPOINT")
+    if not OPENAI_API_KEY:
+        missing.append("OPENAI_KEY")
+    if missing:
+        st.error(
+            "Missing required environment variables: " + ", ".join(missing) +
+            ". Please set them in your .env file."
+        )
+        st.stop()
+
     pdf_reader = PdfReader(uploaded_file)
     
     text = ""
@@ -34,13 +49,21 @@ if uploaded_file:
     if text:
         st.success("✅ PDF uploaded and text extracted!")
 
-        cassio.init(token=ASTRA_DB_TOKEN, database_id=ASTRA_DB_ID)
-
-        vectordb = Cassandra(
-            embedding=embedding,
-            table_name="pdf_chatbot_table",
-            session=None
-        )
+        try:
+            vectordb = AstraDB(
+                embedding=embedding,
+                collection_name=ASTRA_DB_COLLECTION,
+                api_endpoint=ASTRA_DB_API_ENDPOINT,
+                token=ASTRA_DB_TOKEN,
+                namespace=ASTRA_DB_KEYSPACE if ASTRA_DB_KEYSPACE else None,
+            )
+        except Exception as e:
+            st.error(
+                "Failed to initialize Astra Data API vector store. "
+                "Please verify ASTRA_DB_TOKEN and ASTRA_DB_API_ENDPOINT. If you have a specific namespace, set ASTRA_DB_KEYSPACE.\n\n"
+                f"Details: {e}"
+            )
+            st.stop()
 
         index = VectorStoreIndexWrapper(vectorstore=vectordb)
         vectordb.add_texts([text])
